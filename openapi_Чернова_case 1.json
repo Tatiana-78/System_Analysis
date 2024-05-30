@@ -1,0 +1,418 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Bank Payments - OpenAPI 3.0",
+    "description": "Checking and blocking, if needed, of customer payments",
+    "contact": {
+      "name": "Tatiana Chernova",
+      "email": "***@mail.ru"
+    },
+    "version": "1.0.11"
+  },
+  "externalDocs": {
+    "description": "Process Model",
+    "url": "https://docs.google.com/document/d/1HeDt-b3lz0zU8Cm4Q6oESgj7Xtc5hJENWznL2xkHcOk/edit?usp=drive_link"
+  },
+  "servers": [
+    {
+      "url": "https://x_payments.swagger.io/api/v3"
+    }
+  ],
+  "tags": [
+    {
+      "name": "client",
+      "description": "Client's actions"
+    },
+    {
+      "name": "operator",
+      "description": "Bank operator's actions"
+    }
+  ],
+  "paths": {
+    "/client/{clientId}": {
+      "post": {
+        "tags": [
+          "payment_order"
+        ],
+        "summary": "Создать платежное поручение",
+        "description": "",
+        "operationId": "postPO",
+        "parameters": [
+          {
+            "name": "clientId",
+            "in": "path",
+            "description": "ID платежного поручения",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "Наименование контрагента в ПП",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Статус контрагента",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sum",
+            "in": "query",
+            "description": "Сумма к оплате",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "format": "float16"
+            }
+          }
+        ],
+        "responses": {
+          "206": {
+            "description": "Платеж отклонен, проверьте реквизиты контрагента"
+          },
+          "400": {
+            "description": "Ошибка в ПП, проверьте все поля"
+          },
+          "403": {
+            "description": "Все Ваши платежи заблокированы, обратитесь в банк для идентификации личности"
+          },
+          "500": {
+            "description": "Ошибка сервера. Попробуйте позже"
+          }
+        },
+        "security": [
+          {
+            "clients_auth": [
+              "write:clients",
+              "read:clients"
+            ]
+          },
+          {
+            "payments_auth": [
+              "write:payments",
+              "read:payments"
+            ]
+          },
+          {
+            "counterparties_auth": [
+              "read:counterparties"
+            ]
+          }
+        ]
+      }
+    },
+    "/client/findByName": {
+      "get": {
+        "tags": [
+          "counterparty"
+        ],
+        "summary": "Найти контрагента по имени/наименованию",
+        "description": "Наименование контрагента и остаток по расчетам",
+        "operationId": "getCounterByName",
+        "parameters": [
+          {
+            "name": "counterpartyBalance",
+            "in": "query",
+            "description": "Сумма по счету контрагента",
+            "required": false,
+            "explode": true,
+            "schema": {
+              "type": "number",
+              "format": "float16"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Counterparty"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Контрагент не найден"
+          },
+          "500": {
+            "description": "Ошибка сервера. Попробуйте позже"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          },
+          {
+            "clients_auth": [
+              "write:clients",
+              "read:clients"
+            ]
+          }
+        ]
+      }
+    },
+    "/operator/findByStatus": {
+      "get": {
+        "tags": [
+          "client",
+          "operator"
+        ],
+        "summary": "Проверить статус клиента",
+        "description": "",
+        "operationId": "findClientByStatus",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Значения статуса",
+            "required": true,
+            "explode": true,
+            "schema": {
+              "type": "string",
+              "default": "available",
+              "enum": [
+                "available",
+                "blocked"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Блокировки нет",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Client"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Клиент заблокирован, установите его личность"
+          }
+        },
+        "security": [
+          {
+            "clients_auth": [
+              "read:clients"
+            ]
+          },
+          {
+            "operators_auth": [
+              "read:operators"
+            ]
+          }
+        ]
+      }
+    },
+    "/operator/updateStatus": {
+      "put": {
+        "tags": [
+          "client"
+        ],
+        "summary": "Обновить статус клиента",
+        "description": "Изменить статус клиента после идентификации личности",
+        "operationId": "updateStatus",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Client"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Статус обновлен",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Client"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Клиент не найден"
+          },
+          "500": {
+            "description": "Ошибка сервера. Попробуйте позже"
+          }
+        },
+        "security": [
+          {
+            "clients_auth": [
+              "write:clients",
+              "read:clients"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Client": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "example": 100000
+          },
+          "username": {
+            "type": "string",
+            "example": "OOO Romashka"
+          },
+          "address": {
+            "type": "string",
+            "example": "104000, Москва, ул. Мосфильмовская, д. 10"
+          }
+        },
+        "xml": {
+          "name": "client"
+        }
+      },
+      "Counterparty": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "example": 100100
+          },
+          "username": {
+            "type": "string",
+            "example": "OOO Lyutik"
+          },
+          "address": {
+            "type": "string",
+            "example": "104000, Москва, ул. Мосфильмовская, д. 12"
+          }
+        },
+        "xml": {
+          "name": "counterparty"
+        }
+      },
+      "Operator": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "example": 10
+          },
+          "name": {
+            "type": "string",
+            "example": "M.I.Ivanova"
+          },
+          "status": {
+            "type": "string",
+            "description": "operator's status",
+            "enum": [
+              "working",
+              "dimissed"
+            ]
+          }
+        }
+      }
+    },
+    "requestBodies": {
+      "Client": {
+        "description": "Pet object that needs to be added to the store",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Client"
+            }
+          },
+          "application/xml": {
+            "schema": {
+              "$ref": "#/components/schemas/Client"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "clients_auth": {
+        "type": "oauth2",
+        "flows": {
+          "implicit": {
+            "authorizationUrl": "https://tinkoff_payments.swagger.io/oauth/authorize_client",
+            "scopes": {
+              "write:clients": "update client",
+              "read:clients": "read client"
+            }
+          }
+        }
+      },
+      "payments_auth": {
+        "type": "oauth2",
+        "flows": {
+          "implicit": {
+            "authorizationUrl": "https://tinkoff_payments.swagger.io/oauth/authorize_payment",
+            "scopes": {
+              "write:payments": "update payment",
+              "read:payments": "read payment"
+            }
+          }
+        }
+      },
+      "counterparties_auth": {
+        "type": "oauth2",
+        "flows": {
+          "implicit": {
+            "authorizationUrl": "https://tinkoff_payments.swagger.io/oauth/authorize_counter",
+            "scopes": {
+              "write:counterparties": "update counterparty",
+              "read:counterparties": "read counterparty"
+            }
+          }
+        }
+      },
+      "operators_auth": {
+        "type": "oauth2",
+        "flows": {
+          "implicit": {
+            "authorizationUrl": "https://tinkoff_payments.swagger.io/oauth/authorize_operator",
+            "scopes": {
+              "write:counterparties": "update operator",
+              "read:counterparties": "read operator"
+            }
+          }
+        }
+      },
+      "api_key": {
+        "type": "apiKey",
+        "name": "api_key",
+        "in": "header"
+      }
+    }
+  }
+}
